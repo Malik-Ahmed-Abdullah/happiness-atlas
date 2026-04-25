@@ -229,6 +229,18 @@
       flex-shrink: 0;
     }
 
+    #bar-list {
+      max-height: 312px; /* ~12 bars */
+      overflow-y: auto;
+      padding-right: 6px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    #bar-list::-webkit-scrollbar { width: 4px; }
+    #bar-list::-webkit-scrollbar-track { background: transparent; }
+    #bar-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
     .stat-bar {
       display: flex;
       align-items: center;
@@ -345,7 +357,7 @@
     <h1>World Happiness Report</h1>
     <p>156 countries · 7 indicators · Interactive D3.js Dashboard</p>
   </div>
-  <div class="badge">✦  7 Interaction Types</div>
+  <div class="badge">✦ Assignment 3 — All 7 Interaction Types</div>
 </header>
 
 <div class="controls-bar">
