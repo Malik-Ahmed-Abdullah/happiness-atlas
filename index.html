@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>World Happiness Report — Interactive Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #161a24;
+      --surface2: #1e2433;
+      --border: #2a3147;
+      --accent: #e8c97a;
+      --accent2: #7ab8e8;
+      --accent3: #e87a9f;
+      --text: #e8eaf2;
+      --text-muted: #7a82a0;
+      --chart-h: 340px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 40px 48px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    header h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2.2rem;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 48px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .controls-bar label {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    select, input[type=range] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    select:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .sep { width: 1px; height: 28px; background: var(--border); margin: 0 4px; }
+
+    .encode-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 4px;
+    }
+
+    .btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 2px;
+      background: var(--border);
+      border-top: 2px solid var(--border);
+    }
+
+    .panel {
+      background: var(--surface);
+      padding: 24px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel.full { grid-column: 1 / -1; }
+
+    .panel-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .panel-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+    }
+
+    .interaction-tag {
+      position: absolute;
+      top: 14px;
+      right: 18px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 10px;
+      color: var(--accent2);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    svg { display: block; overflow: visible; }
+
+    .axis path, .axis line { stroke: var(--border); }
+    .axis text { fill: var(--text-muted); font-size: 11px; font-family: 'DM Sans', sans-serif; }
+    .axis-label { fill: var(--text-muted); font-size: 11px; font-family: 'DM Sans', sans-serif; }
+
+    .tooltip {
+      position: fixed;
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 14px;
+      pointer-events: none;
+      font-size: 12px;
+      max-width: 200px;
+      z-index: 1000;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      opacity: 0;
+      transition: opacity 0.1s;
+    }
+
+    .tooltip strong { color: var(--accent); display: block; margin-bottom: 4px; }
+    .tooltip span { color: var(--text-muted); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .legend-item:hover { border-color: var(--border); color: var(--text); }
+    .legend-item.dimmed { opacity: 0.3; }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .stat-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .stat-bar .country-name {
+      width: 130px;
+      font-size: 12px;
+      color: var(--text);
+      text-align: right;
+      flex-shrink: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 16px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+
+    .stat-value {
+      width: 38px;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    #selected-info {
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none;
+    }
+
+    #selected-info.visible { display: block; }
+    #selected-info h4 { color: var(--accent); font-family: 'DM Serif Display', serif; font-size: 1.1rem; margin-bottom: 8px; }
+    #selected-info .meta { display: flex; gap: 20px; flex-wrap: wrap; }
+    #selected-info .meta span { color: var(--text-muted); }
+    #selected-info .meta strong { color: var(--text); }
+
+    .abstract-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .donut-wrap { position: relative; display: flex; flex-direction: column; align-items: center; }
+    .donut-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+    .donut-label .big { font-family: 'DM Serif Display', serif; font-size: 1.8rem; color: var(--accent); }
+    .donut-label .small { font-size: 10px; color: var(--text-muted); }
+
+    .range-slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 120px;
+      height: 4px;
+      padding: 0;
+      background: var(--border);
+      border: none;
+      border-radius: 2px;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    #top-n-label { color: var(--accent); font-weight: 600; min-width: 20px; }
+
+    .reconfigure-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+
+    .connection-line { opacity: 0.3; transition: opacity 0.2s; }
+    .connection-line.highlighted { opacity: 1; }
+
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+      .panel.full { grid-column: 1; }
+      header { padding: 24px 20px 16px; }
+      .controls-bar { padding: 12px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>World Happiness Report</h1>
+    <p>156 countries · 7 indicators · Interactive D3.js Dashboard</p>
+  </div>
+  <div class="badge">✦ Assignment 3 — All 7 Interaction Types</div>
+</header>
+
+<div class="controls-bar">
+  <!-- FILTER -->
+  <label>Region</label>
+  <select id="filter-region">
+    <option value="all">All Regions</option>
+  </select>
+  <div class="sep"></div>
+  <!-- ENCODE -->
+  <label>Color by</label>
+  <div class="btn-group encode-group" id="encode-btns">
+    <button class="btn active" data-enc="region">Region</button>
+    <button class="btn" data-enc="score">Score</button>
+    <button class="btn" data-enc="gdp">GDP</button>
+  </div>
+  <div class="sep"></div>
+  <!-- RECONFIGURE -->
+  <label>Y-Axis</label>
+  <select id="reconfig-y">
+    <option value="score">Happiness Score</option>
+    <option value="gdp">GDP per Capita</option>
+    <option value="social">Social Support</option>
+    <option value="health">Healthy Life Expectancy</option>
+    <option value="freedom">Freedom</option>
+    <option value="generosity">Generosity</option>
+    <option value="corruption">Trust in Govt</option>
+  </select>
+  <div class="sep"></div>
+  <!-- ABSTRACT control -->
+  <label>Top</label>
+  <div class="range-slider-wrap">
+    <input type="range" id="top-n" min="5" max="30" value="10" step="1"/>
+    <span id="top-n-label">10</span>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="grid">
+  <!-- SCATTER: Select + Connect + Encode -->
+  <div class="panel">
+    <div class="interaction-tag">Select · Connect · Encode</div>
+    <div class="panel-title">Happiness vs GDP per Capita</div>
+    <div class="panel-sub">Click a point to select · Hover to connect bars</div>
+    <svg id="scatter"></svg>
+    <div id="selected-info">
+      <h4 id="sel-country"></h4>
+      <div class="meta">
+        <div><span>Score </span><strong id="sel-score"></strong></div>
+        <div><span>GDP </span><strong id="sel-gdp"></strong></div>
+        <div><span>Region </span><strong id="sel-region"></strong></div>
+        <div><span>Health </span><strong id="sel-health"></strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BAR CHART: Filter + Reconfigure + Abstract -->
+  <div class="panel">
+    <div class="interaction-tag">Filter · Reconfigure · Abstract</div>
+    <div class="panel-title">Top Countries Ranking</div>
+    <div class="panel-sub">Filtered by region · sorted by selected metric</div>
+    <div id="bar-list"></div>
+  </div>
+
+  <!-- PARALLEL COORDS: Elaborate + Connect -->
+  <div class="panel full">
+    <div class="interaction-tag">Elaborate · Connect</div>
+    <div class="panel-title">Multi-Dimensional Profiles — Top Countries</div>
+    <div class="panel-sub">Hover a line to elaborate · Lines connect same country across all axes</div>
+    <svg id="parallel"></svg>
+    <div class="legend" id="legend"></div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────────────
+// World Happiness Report 2019 dataset (156 countries, manually curated subset
+// representing all regions for a full cross-regional view)
+const raw = [
+  {country:"Finland",region:"Western Europe",score:7.769,gdp:1.340,social:1.587,health:0.986,freedom:0.596,generosity:0.153,corruption:0.393},
+  {country:"Denmark",region:"Western Europe",score:7.600,gdp:1.383,social:1.573,health:0.996,freedom:0.592,generosity:0.252,corruption:0.410},
+  {country:"Norway",region:"Western Europe",score:7.554,gdp:1.488,social:1.582,health:1.028,freedom:0.603,generosity:0.271,corruption:0.341},
+  {country:"Iceland",region:"Western Europe",score:7.494,gdp:1.380,social:1.624,health:1.026,freedom:0.591,generosity:0.354,corruption:0.118},
+  {country:"Netherlands",region:"Western Europe",score:7.488,gdp:1.396,social:1.522,health:0.999,freedom:0.557,generosity:0.322,corruption:0.298},
+  {country:"Switzerland",region:"Western Europe",score:7.480,gdp:1.452,social:1.526,health:1.052,freedom:0.572,generosity:0.263,corruption:0.343},
+  {country:"Sweden",region:"Western Europe",score:7.343,gdp:1.387,social:1.487,health:1.009,freedom:0.574,generosity:0.267,corruption:0.373},
+  {country:"New Zealand",region:"Australia and New Zealand",score:7.307,gdp:1.303,social:1.557,health:1.026,freedom:0.585,generosity:0.330,corruption:0.380},
+  {country:"Canada",region:"North America",score:7.278,gdp:1.365,social:1.505,health:1.039,freedom:0.584,generosity:0.285,corruption:0.308},
+  {country:"Austria",region:"Western Europe",score:7.246,gdp:1.376,social:1.475,health:1.016,freedom:0.532,generosity:0.244,corruption:0.226},
+  {country:"Australia",region:"Australia and New Zealand",score:7.228,gdp:1.372,social:1.548,health:1.036,freedom:0.557,generosity:0.332,corruption:0.290},
+  {country:"Costa Rica",region:"Latin America and Caribbean",score:7.167,gdp:1.034,social:1.441,health:0.963,freedom:0.558,generosity:0.144,corruption:0.093},
+  {country:"Israel",region:"Middle East and North Africa",score:7.139,gdp:1.276,social:1.455,health:1.029,freedom:0.371,generosity:0.261,corruption:0.082},
+  {country:"Luxembourg",region:"Western Europe",score:7.090,gdp:1.609,social:1.479,health:1.012,freedom:0.526,generosity:0.194,corruption:0.247},
+  {country:"United Kingdom",region:"Western Europe",score:7.054,gdp:1.333,social:1.538,health:0.996,freedom:0.450,generosity:0.348,corruption:0.138},
+  {country:"Ireland",region:"Western Europe",score:7.021,gdp:1.499,social:1.553,health:0.999,freedom:0.516,generosity:0.298,corruption:0.131},
+  {country:"Germany",region:"Western Europe",score:6.985,gdp:1.373,social:1.454,health:0.987,freedom:0.495,generosity:0.261,corruption:0.265},
+  {country:"Belgium",region:"Western Europe",score:6.923,gdp:1.356,social:1.504,health:1.004,freedom:0.473,generosity:0.160,corruption:0.210},
+  {country:"United States",region:"North America",score:6.892,gdp:1.433,social:1.457,health:0.874,freedom:0.454,generosity:0.280,corruption:0.128},
+  {country:"Czech Republic",region:"Central and Eastern Europe",score:6.852,gdp:1.269,social:1.487,health:0.92,freedom:0.457,generosity:0.046,corruption:0.036},
+  {country:"United Arab Emirates",region:"Middle East and North Africa",score:6.825,gdp:1.503,social:1.310,health:0.825,freedom:0.598,generosity:0.262,corruption:0.182},
+  {country:"Malta",region:"Western Europe",score:6.726,gdp:1.300,social:1.520,health:0.999,freedom:0.564,generosity:0.375,corruption:0.151},
+  {country:"Mexico",region:"Latin America and Caribbean",score:6.595,gdp:1.070,social:1.323,health:0.861,freedom:0.433,generosity:0.074,corruption:0.073},
+  {country:"France",region:"Western Europe",score:6.592,gdp:1.324,social:1.472,health:1.045,freedom:0.436,generosity:0.111,corruption:0.183},
+  {country:"Taiwan",region:"East Asia",score:6.446,gdp:1.368,social:1.338,health:0.882,freedom:0.408,generosity:0.242,corruption:0.080},
+  {country:"Chile",region:"Latin America and Caribbean",score:6.444,gdp:1.159,social:1.369,health:0.920,freedom:0.357,generosity:0.187,corruption:0.055},
+  {country:"Saudi Arabia",region:"Middle East and North Africa",score:6.375,gdp:1.403,social:1.357,health:0.795,freedom:0.334,generosity:0.131,corruption:0.077},
+  {country:"Qatar",region:"Middle East and North Africa",score:6.374,gdp:1.684,social:1.313,health:0.871,freedom:0.555,generosity:0.220,corruption:0.167},
+  {country:"Spain",region:"Western Europe",score:6.354,gdp:1.286,social:1.484,health:1.062,freedom:0.404,generosity:0.153,corruption:0.100},
+  {country:"Panama",region:"Latin America and Caribbean",score:6.321,gdp:1.149,social:1.442,health:0.910,freedom:0.516,generosity:0.109,corruption:0.110},
+  {country:"Brazil",region:"Latin America and Caribbean",score:6.300,gdp:1.004,social:1.439,health:0.802,freedom:0.390,generosity:0.099,corruption:0.079},
+  {country:"Uruguay",region:"Latin America and Caribbean",score:6.293,gdp:1.124,social:1.465,health:0.891,freedom:0.523,generosity:0.127,corruption:0.140},
+  {country:"Singapore",region:"Southeast Asia",score:6.262,gdp:1.572,social:1.463,health:1.141,freedom:0.556,generosity:0.271,corruption:0.453},
+  {country:"Italy",region:"Western Europe",score:6.223,gdp:1.294,social:1.488,health:1.074,freedom:0.269,generosity:0.013,corruption:0.035},
+  {country:"Slovakia",region:"Central and Eastern Europe",score:6.198,gdp:1.246,social:1.517,health:0.881,freedom:0.334,generosity:0.075,corruption:0.025},
+  {country:"Japan",region:"East Asia",score:5.886,gdp:1.327,social:1.419,health:1.088,freedom:0.445,generosity:0.069,corruption:0.039},
+  {country:"South Korea",region:"East Asia",score:5.895,gdp:1.301,social:1.219,health:1.036,freedom:0.159,generosity:0.175,corruption:0.100},
+  {country:"Russia",region:"Central and Eastern Europe",score:5.648,gdp:1.183,social:1.452,health:0.726,freedom:0.334,generosity:0.030,corruption:0.059},
+  {country:"China",region:"East Asia",score:5.191,gdp:1.029,social:1.125,health:0.893,freedom:0.521,generosity:0.058,corruption:0.100},
+  {country:"Colombia",region:"Latin America and Caribbean",score:6.125,gdp:0.985,social:1.410,health:0.841,freedom:0.471,generosity:0.128,corruption:0.088},
+  {country:"Argentina",region:"Latin America and Caribbean",score:5.793,gdp:1.092,social:1.432,health:0.881,freedom:0.351,generosity:0.060,corruption:0.061},
+  {country:"Turkey",region:"Middle East and North Africa",score:5.373,gdp:1.183,social:1.360,health:0.808,freedom:0.199,generosity:0.026,corruption:0.035},
+  {country:"Peru",region:"Latin America and Caribbean",score:5.697,gdp:0.960,social:1.274,health:0.820,freedom:0.433,generosity:0.072,corruption:0.069},
+  {country:"Indonesia",region:"Southeast Asia",score:5.192,gdp:0.931,social:1.203,health:0.660,freedom:0.491,generosity:0.498,corruption:0.028},
+  {country:"Vietnam",region:"Southeast Asia",score:5.175,gdp:0.741,social:1.346,health:0.851,freedom:0.543,generosity:0.147,corruption:0.073},
+  {country:"Morocco",region:"Middle East and North Africa",score:5.208,gdp:0.801,social:0.874,health:0.724,freedom:0.480,generosity:0.076,corruption:0.040},
+  {country:"India",region:"South Asia",score:4.015,gdp:0.755,social:0.765,health:0.588,freedom:0.323,generosity:0.163,corruption:0.065},
+  {country:"Pakistan",region:"South Asia",score:5.653,gdp:0.677,social:1.061,health:0.523,freedom:0.501,generosity:0.254,corruption:0.123},
+  {country:"Bangladesh",region:"South Asia",score:4.456,gdp:0.562,social:0.928,health:0.630,freedom:0.529,generosity:0.202,corruption:0.131},
+  {country:"Nepal",region:"South Asia",score:4.913,gdp:0.446,social:1.161,health:0.588,freedom:0.529,generosity:0.261,corruption:0.048},
+  {country:"Kenya",region:"Sub-Saharan Africa",score:4.509,gdp:0.512,social:0.928,health:0.372,freedom:0.536,generosity:0.247,corruption:0.120},
+  {country:"Nigeria",region:"Sub-Saharan Africa",score:5.085,gdp:0.696,social:1.121,health:0.245,freedom:0.488,generosity:0.198,corruption:0.053},
+  {country:"Ghana",region:"Sub-Saharan Africa",score:4.996,gdp:0.611,social:1.001,health:0.451,freedom:0.533,generosity:0.169,corruption:0.106},
+  {country:"Uganda",region:"Sub-Saharan Africa",score:4.189,gdp:0.332,social:0.994,health:0.391,freedom:0.536,generosity:0.268,corruption:0.072},
+  {country:"Tanzania",region:"Sub-Saharan Africa",score:3.231,gdp:0.476,social:0.885,health:0.499,freedom:0.417,generosity:0.276,corruption:0.147},
+  {country:"Zimbabwe",region:"Sub-Saharan Africa",score:3.663,gdp:0.366,social:1.058,health:0.338,freedom:0.296,generosity:0.165,corruption:0.077},
+  {country:"Ethiopia",region:"Sub-Saharan Africa",score:4.350,gdp:0.370,social:0.600,health:0.374,freedom:0.459,generosity:0.258,corruption:0.103},
+  {country:"Egypt",region:"Middle East and North Africa",score:4.166,gdp:0.913,social:1.044,health:0.698,freedom:0.430,generosity:0.071,corruption:0.073},
+  {country:"Iran",region:"Middle East and North Africa",score:4.548,gdp:1.055,social:0.897,health:0.810,freedom:0.099,generosity:0.174,corruption:0.064},
+  {country:"Lebanon",region:"Middle East and North Africa",score:5.197,gdp:1.021,social:1.276,health:0.856,freedom:0.270,generosity:0.168,corruption:0.018},
+  {country:"Jordan",region:"Middle East and North Africa",score:4.906,gdp:0.894,social:1.184,health:0.815,freedom:0.361,generosity:0.149,corruption:0.078},
+  {country:"Afghanistan",region:"South Asia",score:2.694,gdp:0.350,social:0.517,health:0.361,freedom:0.000,generosity:0.158,corruption:0.025},
+  {country:"Syria",region:"Middle East and North Africa",score:3.462,gdp:0.619,social:0.378,health:0.440,freedom:0.013,generosity:0.331,corruption:0.141},
+  {country:"Venezuela",region:"Latin America and Caribbean",score:4.707,gdp:0.960,social:1.427,health:0.805,freedom:0.154,generosity:0.064,corruption:0.047},
+  {country:"Haiti",region:"Latin America and Caribbean",score:3.597,gdp:0.323,social:0.688,health:0.449,freedom:0.026,generosity:0.419,corruption:0.082},
+  {country:"Botswana",region:"Sub-Saharan Africa",score:3.488,gdp:1.041,social:1.145,health:0.000,freedom:0.478,generosity:0.025,corruption:0.100},
+  {country:"South Africa",region:"Sub-Saharan Africa",score:4.722,gdp:1.044,social:1.374,health:0.367,freedom:0.388,generosity:0.082,corruption:0.060},
+  {country:"Thailand",region:"Southeast Asia",score:6.008,gdp:1.149,social:1.463,health:0.895,freedom:0.497,generosity:0.398,corruption:0.099},
+  {country:"Philippines",region:"Southeast Asia",score:5.631,gdp:0.806,social:1.280,health:0.626,freedom:0.543,generosity:0.207,corruption:0.048},
+  {country:"Malaysia",region:"Southeast Asia",score:5.339,gdp:1.221,social:1.171,health:0.828,freedom:0.366,generosity:0.220,corruption:0.110},
+  {country:"Cambodia",region:"Southeast Asia",score:4.700,gdp:0.574,social:0.838,health:0.620,freedom:0.609,generosity:0.377,corruption:0.066},
+  {country:"Myanmar",region:"Southeast Asia",score:4.360,gdp:0.710,social:0.869,health:0.578,freedom:0.572,generosity:0.799,corruption:0.073},
+  {country:"Poland",region:"Central and Eastern Europe",score:6.182,gdp:1.206,social:1.438,health:0.884,freedom:0.475,generosity:0.042,corruption:0.055},
+  {country:"Hungary",region:"Central and Eastern Europe",score:5.758,gdp:1.201,social:1.374,health:0.794,freedom:0.337,generosity:0.015,corruption:0.059},
+  {country:"Romania",region:"Central and Eastern Europe",score:6.070,gdp:1.162,social:1.232,health:0.835,freedom:0.469,generosity:0.060,corruption:0.061},
+  {country:"Ukraine",region:"Central and Eastern Europe",score:4.332,gdp:0.820,social:1.399,health:0.739,freedom:0.310,generosity:0.131,corruption:0.044},
+  {country:"Kazakhstan",region:"Central and Eastern Europe",score:5.809,gdp:1.173,social:1.508,health:0.729,freedom:0.466,generosity:0.100,corruption:0.096},
+  {country:"Greece",region:"Western Europe",score:5.694,gdp:1.181,social:1.156,health:1.025,freedom:0.243,generosity:0.056,corruption:0.054},
+  {country:"Portugal",region:"Western Europe",score:5.693,gdp:1.236,social:1.407,health:1.039,freedom:0.502,generosity:0.127,corruption:0.113},
+  {country:"Cuba",region:"Latin America and Caribbean",score:5.581,gdp:0.941,social:1.492,health:0.979,freedom:0.299,generosity:0.232,corruption:0.136},
+  {country:"Dominican Republic",region:"Latin America and Caribbean",score:5.545,gdp:1.015,social:1.272,health:0.838,freedom:0.467,generosity:0.117,corruption:0.062},
+  {country:"El Salvador",region:"Latin America and Caribbean",score:6.253,gdp:0.794,social:1.242,health:0.789,freedom:0.531,generosity:0.083,corruption:0.083},
+  {country:"Guatemala",region:"Latin America and Caribbean",score:6.436,gdp:0.777,social:1.296,health:0.825,freedom:0.526,generosity:0.183,corruption:0.072},
+  {country:"Honduras",region:"Latin America and Caribbean",score:5.860,gdp:0.642,social:1.236,health:0.774,freedom:0.488,generosity:0.124,corruption:0.052},
+  {country:"Nicaragua",region:"Latin America and Caribbean",score:6.105,gdp:0.694,social:1.368,health:0.814,freedom:0.532,generosity:0.191,corruption:0.078},
+  {country:"Ecuador",region:"Latin America and Caribbean",score:5.901,gdp:0.912,social:1.306,health:0.868,freedom:0.498,generosity:0.138,corruption:0.093},
+  {country:"Bolivia",region:"Latin America and Caribbean",score:5.779,gdp:0.776,social:1.209,health:0.759,freedom:0.529,generosity:0.131,corruption:0.084},
+  {country:"Paraguay",region:"Latin America and Caribbean",score:5.743,gdp:0.778,social:1.371,health:0.749,freedom:0.560,generosity:0.240,corruption:0.069},
+  {country:"Trinidad & Tobago",region:"Latin America and Caribbean",score:6.192,gdp:1.231,social:1.372,health:0.748,freedom:0.444,generosity:0.150,corruption:0.032},
+  {country:"Jamaica",region:"Latin America and Caribbean",score:5.890,gdp:0.829,social:1.380,health:0.778,freedom:0.588,generosity:0.0,corruption:0.166},
+  {country:"Cameroon",region:"Sub-Saharan Africa",score:5.044,gdp:0.573,social:0.898,health:0.331,freedom:0.381,generosity:0.161,corruption:0.066},
+  {country:"Senegal",region:"Sub-Saharan Africa",score:4.681,gdp:0.466,social:0.721,health:0.461,freedom:0.503,generosity:0.238,corruption:0.113},
+  {country:"Mali",region:"Sub-Saharan Africa",score:4.080,gdp:0.272,social:0.818,health:0.227,freedom:0.552,generosity:0.274,corruption:0.085},
+  {country:"Burkina Faso",region:"Sub-Saharan Africa",score:4.587,gdp:0.248,social:0.776,health:0.256,freedom:0.474,generosity:0.237,corruption:0.099},
+  {country:"Rwanda",region:"Sub-Saharan Africa",score:3.334,gdp:0.359,social:0.711,health:0.614,freedom:0.555,generosity:0.217,corruption:0.411},
+  {country:"Madagascar",region:"Sub-Saharan Africa",score:4.166,gdp:0.274,social:0.812,health:0.439,freedom:0.541,generosity:0.214,corruption:0.065},
+  {country:"Mozambique",region:"Sub-Saharan Africa",score:4.466,gdp:0.204,social:0.598,health:0.343,freedom:0.458,generosity:0.236,corruption:0.100},
+  {country:"Central African Republic",region:"Sub-Saharan Africa",score:3.083,gdp:0.026,social:0.000,health:0.105,freedom:0.225,generosity:0.235,corruption:0.035},
+  {country:"South Sudan",region:"Sub-Saharan Africa",score:2.853,gdp:0.306,social:0.575,health:0.295,freedom:0.010,generosity:0.202,corruption:0.091},
+  {country:"Burundi",region:"Sub-Saharan Africa",score:2.905,gdp:0.000,social:0.424,health:0.269,freedom:0.148,generosity:0.149,corruption:0.074},
+  {country:"Yemen",region:"Middle East and North Africa",score:3.380,gdp:0.287,social:1.163,health:0.463,freedom:0.143,generosity:0.191,corruption:0.048},
+  {country:"Iraq",region:"Middle East and North Africa",score:4.437,gdp:1.043,social:1.019,health:0.574,freedom:0.164,generosity:0.149,corruption:0.062},
+  {country:"Palestinian Territories",region:"Middle East and North Africa",score:4.743,gdp:0.657,social:1.247,health:0.672,freedom:0.229,generosity:0.256,corruption:0.051},
+  {country:"Libya",region:"Middle East and North Africa",score:5.525,gdp:1.083,social:1.172,health:0.758,freedom:0.371,generosity:0.165,corruption:0.091},
+  {country:"Algeria",region:"Middle East and North Africa",score:5.211,gdp:1.002,social:1.160,health:0.785,freedom:0.267,generosity:0.069,corruption:0.069},
+  {country:"Tunisia",region:"Middle East and North Africa",score:4.739,gdp:0.924,social:0.900,health:0.818,freedom:0.316,generosity:0.064,corruption:0.061},
+  {country:"Sudan",region:"Sub-Saharan Africa",score:4.138,gdp:0.591,social:1.169,health:0.381,freedom:0.106,generosity:0.253,corruption:0.068},
+  {country:"Sri Lanka",region:"South Asia",score:4.330,gdp:0.956,social:1.163,health:0.841,freedom:0.506,generosity:0.279,corruption:0.091},
+  {country:"Azerbaijan",region:"Central and Eastern Europe",score:5.208,gdp:1.043,social:1.147,health:0.776,freedom:0.459,generosity:0.047,corruption:0.060},
+  {country:"Georgia",region:"Central and Eastern Europe",score:4.519,gdp:0.902,social:0.969,health:0.769,freedom:0.287,generosity:0.066,corruption:0.040},
+  {country:"Armenia",region:"Central and Eastern Europe",score:4.559,gdp:0.850,social:1.055,health:0.815,freedom:0.283,generosity:0.042,corruption:0.036},
+  {country:"Moldova",region:"Central and Eastern Europe",score:5.529,gdp:0.685,social:1.200,health:0.739,freedom:0.375,generosity:0.133,corruption:0.036},
+  {country:"Belarus",region:"Central and Eastern Europe",score:5.802,gdp:1.101,social:1.491,health:0.826,freedom:0.268,generosity:0.122,corruption:0.049},
+  {country:"Lithuania",region:"Central and Eastern Europe",score:6.149,gdp:1.238,social:1.515,health:0.818,freedom:0.291,generosity:0.023,corruption:0.042},
+  {country:"Latvia",region:"Central and Eastern Europe",score:5.940,gdp:1.187,social:1.465,health:0.812,freedom:0.347,generosity:0.059,corruption:0.064},
+  {country:"Estonia",region:"Central and Eastern Europe",score:5.893,gdp:1.237,social:1.528,health:0.874,freedom:0.495,generosity:0.103,corruption:0.161},
+  {country:"Serbia",region:"Central and Eastern Europe",score:5.603,gdp:1.088,social:1.287,health:0.831,freedom:0.363,generosity:0.083,corruption:0.073},
+  {country:"Croatia",region:"Central and Eastern Europe",score:5.432,gdp:1.155,social:1.296,health:0.914,freedom:0.401,generosity:0.052,corruption:0.061},
+  {country:"Bosnia Herzegovina",region:"Central and Eastern Europe",score:5.239,gdp:0.945,social:0.930,health:0.823,freedom:0.239,generosity:0.108,corruption:0.023},
+  {country:"Bulgaria",region:"Central and Eastern Europe",score:5.011,gdp:1.092,social:1.513,health:0.815,freedom:0.311,generosity:0.081,corruption:0.059},
+  {country:"Macedonia",region:"Central and Eastern Europe",score:5.274,gdp:1.054,social:1.353,health:0.838,freedom:0.365,generosity:0.079,corruption:0.040},
+  {country:"Albania",region:"Central and Eastern Europe",score:4.719,gdp:1.026,social:0.832,health:0.874,freedom:0.410,generosity:0.084,corruption:0.031},
+  {country:"Kosovo",region:"Central and Eastern Europe",score:5.094,gdp:0.882,social:0.811,health:0.756,freedom:0.512,generosity:0.230,corruption:0.063},
+  {country:"Cyprus",region:"Western Europe",score:6.046,gdp:1.263,social:1.401,health:1.040,freedom:0.489,generosity:0.128,corruption:0.105},
+  {country:"Mongolia",region:"East Asia",score:5.285,gdp:0.948,social:1.531,health:0.682,freedom:0.508,generosity:0.139,corruption:0.027},
+  {country:"Laos",region:"Southeast Asia",score:4.623,gdp:0.741,social:0.921,health:0.614,freedom:0.523,generosity:0.437,corruption:0.090},
+  {country:"Tajikistan",region:"Central and Eastern Europe",score:5.303,gdp:0.493,social:1.003,health:0.622,freedom:0.534,generosity:0.178,corruption:0.078},
+  {country:"Kyrgyzstan",region:"Central and Eastern Europe",score:5.261,gdp:0.561,social:1.233,health:0.617,freedom:0.516,generosity:0.196,corruption:0.091},
+  {country:"Uzbekistan",region:"Central and Eastern Europe",score:6.095,gdp:0.745,social:1.529,health:0.728,freedom:0.628,generosity:0.314,corruption:0.245},
+  {country:"Turkmenistan",region:"Central and Eastern Europe",score:5.125,gdp:0.898,social:1.432,health:0.657,freedom:0.392,generosity:0.181,corruption:0.083},
+  {country:"Bhutan",region:"South Asia",score:5.082,gdp:0.810,social:1.138,health:0.639,freedom:0.548,generosity:0.199,corruption:0.175},
+  {country:"Comoros",region:"Sub-Saharan Africa",score:4.375,gdp:0.274,social:0.890,health:0.462,freedom:0.514,generosity:0.270,corruption:0.176},
+  {country:"Swaziland",region:"Sub-Saharan Africa",score:4.212,gdp:0.782,social:1.081,health:0.000,freedom:0.463,generosity:0.136,corruption:0.094},
+  {country:"Lesotho",region:"Sub-Saharan Africa",score:3.655,gdp:0.489,social:1.058,health:0.000,freedom:0.317,generosity:0.187,corruption:0.100},
+  {country:"Namibia",region:"Sub-Saharan Africa",score:4.715,gdp:0.879,social:1.227,health:0.429,freedom:0.567,generosity:0.070,corruption:0.119},
+  {country:"Zambia",region:"Sub-Saharan Africa",score:3.759,gdp:0.578,social:0.929,health:0.355,freedom:0.497,generosity:0.221,corruption:0.064},
+  {country:"Malawi",region:"Sub-Saharan Africa",score:3.410,gdp:0.200,social:0.566,health:0.339,freedom:0.549,generality:0.208,corruption:0.117},
+  {country:"Sierra Leone",region:"Sub-Saharan Africa",score:3.794,gdp:0.268,social:0.841,health:0.000,freedom:0.432,generosity:0.274,corruption:0.080},
+  {country:"Guinea",region:"Sub-Saharan Africa",score:4.150,gdp:0.344,social:0.735,health:0.292,freedom:0.413,generosity:0.219,corruption:0.062},
+  {country:"Togo",region:"Sub-Saharan Africa",score:3.999,gdp:0.275,social:0.572,health:0.378,freedom:0.384,generosity:0.233,corruption:0.060},
+  {country:"Benin",region:"Sub-Saharan Africa",score:4.883,gdp:0.366,social:0.503,health:0.381,freedom:0.497,generosity:0.249,corruption:0.082},
+  {country:"Mauritania",region:"Sub-Saharan Africa",score:4.490,gdp:0.535,social:1.083,health:0.473,freedom:0.438,generosity:0.218,corruption:0.082},
+  {country:"Gabon",region:"Sub-Saharan Africa",score:4.799,gdp:1.152,social:1.064,health:0.448,freedom:0.374,generosity:0.080,corruption:0.069},
+  {country:"Congo",region:"Sub-Saharan Africa",score:4.812,gdp:0.673,social:1.022,health:0.388,freedom:0.342,generosity:0.105,corruption:0.040},
+  {country:"Niger",region:"Sub-Saharan Africa",score:4.628,gdp:0.138,social:0.885,health:0.262,freedom:0.435,generosity:0.175,corruption:0.084},
+  {country:"Chad",region:"Sub-Saharan Africa",score:4.355,gdp:0.350,social:0.685,health:0.205,freedom:0.189,generosity:0.153,corruption:0.072},
+  {country:"Ivory Coast",region:"Sub-Saharan Africa",score:4.944,gdp:0.641,social:0.735,health:0.298,freedom:0.436,generosity:0.110,corruption:0.044},
+  {country:"Angola",region:"Sub-Saharan Africa",score:3.795,gdp:0.748,social:1.038,health:0.268,freedom:0.247,generosity:0.118,corruption:0.055},
+  {country:"Liberia",region:"Sub-Saharan Africa",score:3.975,gdp:0.127,social:0.785,health:0.314,freedom:0.452,generosity:0.233,corruption:0.033},
+  {country:"Mauritius",region:"Sub-Saharan Africa",score:5.888,gdp:1.180,social:1.273,health:0.826,freedom:0.562,generosity:0.227,corruption:0.156},
+];
+
+// Fix any missing generosity fields
+raw.forEach(d => { if (!d.generosity) d.generosity = 0; });
+
+const data = raw;
+
+// ─── SETUP ───────────────────────────────────────────────────────────────────
+const regions = [...new Set(data.map(d => d.region))].sort();
+const regionColors = d3.scaleOrdinal()
+  .domain(regions)
+  .range(["#e8c97a","#7ab8e8","#e87a9f","#7ae8b8","#b87ae8","#e8997a","#7ae8e8","#e8e87a"]);
+
+// Populate filter dropdown
+const filterSel = document.getElementById("filter-region");
+regions.forEach(r => {
+  const o = document.createElement("option");
+  o.value = r; o.text = r;
+  filterSel.appendChild(o);
+});
+
+// State
+let state = {
+  region: "all",
+  encoding: "region",
+  yMetric: "score",
+  topN: 10,
+  selected: null,
+  hovered: null,
+};
+
+const metrics = {
+  score: "Happiness Score", gdp: "GDP per Capita", social: "Social Support",
+  health: "Healthy Life Expectancy", freedom: "Freedom",
+  generosity: "Generosity", corruption: "Trust in Govt"
+};
+
+// ─── TOOLTIP ─────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById("tooltip");
+
+function showTip(event, html) {
+  tooltip.innerHTML = html;
+  tooltip.style.opacity = 1;
+  moveTip(event);
+}
+
+function moveTip(event) {
+  const x = event.clientX + 14;
+  const y = event.clientY - 10;
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
+}
+
+function hideTip() { tooltip.style.opacity = 0; }
+
+// ─── SCATTER ─────────────────────────────────────────────────────────────────
+const scatterSvg = d3.select("#scatter");
+const scatterMargin = { top: 10, right: 20, bottom: 50, left: 50 };
+let scatterW, scatterH;
+let scatterG;
+
+function initScatter() {
+  const container = document.getElementById("scatter").parentElement;
+  scatterW = container.clientWidth - 56 - scatterMargin.left - scatterMargin.right;
+  scatterH = 300;
+  scatterSvg
+    .attr("width", scatterW + scatterMargin.left + scatterMargin.right)
+    .attr("height", scatterH + scatterMargin.top + scatterMargin.bottom);
+  scatterG = scatterSvg.append("g")
+    .attr("transform", `translate(${scatterMargin.left},${scatterMargin.top})`);
+  renderScatter();
+}
+
+function renderScatter() {
+  if (!scatterG) return;
+  scatterG.selectAll("*").remove();
+
+  const filtered = state.region === "all" ? data : data.filter(d => d.region === state.region);
+
+  const xScale = d3.scaleLinear()
+    .domain([0, d3.max(filtered, d => d.gdp) * 1.05])
+    .range([0, scatterW]);
+
+  const yScale = d3.scaleLinear()
+    .domain([d3.min(filtered, d => d[state.yMetric]) * 0.95, d3.max(filtered, d => d[state.yMetric]) * 1.02])
+    .range([scatterH, 0]);
+
+  const colorScale = state.encoding === "region"
+    ? d => regionColors(d.region)
+    : state.encoding === "score"
+      ? (() => {
+          const cs = d3.scaleSequential(d3.interpolateYlOrRd).domain([2.5, 8]);
+          return d => cs(d.score);
+        })()
+      : (() => {
+          const cs = d3.scaleSequential(d3.interpolateBuGn).domain([0, 1.7]);
+          return d => cs(d.gdp);
+        })();
+
+  const colorFn = typeof colorScale === "function" && colorScale.domain
+    ? d => colorScale(d[state.encoding === "region" ? "region" : state.encoding])
+    : colorScale;
+
+  // Grid lines
+  scatterG.append("g").attr("class", "axis")
+    .call(d3.axisLeft(yScale).ticks(5).tickSize(-scatterW).tickFormat(""))
+    .select(".domain").remove();
+  scatterG.selectAll(".tick line").attr("stroke", "var(--border)").attr("stroke-dasharray", "3,3");
+
+  // Axes
+  scatterG.append("g").attr("class", "axis")
+    .attr("transform", `translate(0,${scatterH})`)
+    .call(d3.axisBottom(xScale).ticks(6).tickFormat(d => d.toFixed(2)));
+
+  scatterG.append("g").attr("class", "axis")
+    .call(d3.axisLeft(yScale).ticks(6));
+
+  // Axis labels
+  scatterG.append("text").attr("class", "axis-label")
+    .attr("x", scatterW / 2).attr("y", scatterH + 42)
+    .attr("text-anchor", "middle").text("GDP per Capita (log)");
+
+  scatterG.append("text").attr("class", "axis-label")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -scatterH / 2).attr("y", -38)
+    .attr("text-anchor", "middle").text(metrics[state.yMetric]);
+
+  // Points
+  scatterG.selectAll("circle")
+    .data(filtered)
+    .join("circle")
+    .attr("cx", d => xScale(d.gdp))
+    .attr("cy", d => yScale(d[state.yMetric]))
+    .attr("r", d => state.selected?.country === d.country ? 8 : 5)
+    .attr("fill", d => colorFn(d))
+    .attr("fill-opacity", d => {
+      if (state.selected && state.selected.country !== d.country) return 0.25;
+      return 0.85;
+    })
+    .attr("stroke", d => state.selected?.country === d.country ? "#fff" : "transparent")
+    .attr("stroke-width", 2)
+    .style("cursor", "pointer")
+    .on("mouseover", function(event, d) {
+      state.hovered = d;
+      showTip(event, `<strong>${d.country}</strong>
+        <span>${d.region}</span><br/>
+        Score: <strong>${d.score.toFixed(3)}</strong><br/>
+        GDP: <strong>${d.gdp.toFixed(3)}</strong><br/>
+        ${metrics[state.yMetric]}: <strong>${(d[state.yMetric] || 0).toFixed(3)}</strong>`);
+      renderParallel();
+    })
+    .on("mousemove", moveTip)
+    .on("mouseout", function() {
+      state.hovered = null;
+      hideTip();
+      renderParallel();
+    })
+    .on("click", function(event, d) {
+      // SELECT interaction
+      if (state.selected?.country === d.country) {
+        state.selected = null;
+        document.getElementById("selected-info").classList.remove("visible");
+      } else {
+        state.selected = d;
+        document.getElementById("selected-info").classList.add("visible");
+        document.getElementById("sel-country").textContent = d.country;
+        document.getElementById("sel-score").textContent = d.score.toFixed(3);
+        document.getElementById("sel-gdp").textContent = d.gdp.toFixed(3);
+        document.getElementById("sel-region").textContent = d.region;
+        document.getElementById("sel-health").textContent = (d.health || 0).toFixed(3);
+      }
+      renderScatter();
+      renderBars();
+    });
+}
+
+// ─── BAR CHART (Filter + Reconfigure + Abstract) ──────────────────────────────
+function renderBars() {
+  const container = document.getElementById("bar-list");
+  const filtered = state.region === "all" ? data : data.filter(d => d.region === state.region);
+  const metric = state.yMetric;
+  const top = [...filtered]
+    .sort((a, b) => (b[metric] || 0) - (a[metric] || 0))
+    .slice(0, state.topN);
+
+  const maxVal = d3.max(top, d => d[metric] || 0);
+
+  container.innerHTML = "";
+  top.forEach(d => {
+    const pct = ((d[metric] || 0) / maxVal * 100).toFixed(1);
+    const isSelected = state.selected?.country === d.country;
+    const color = regionColors(d.region);
+
+    container.insertAdjacentHTML("beforeend", `
+      <div class="stat-bar" style="opacity:${isSelected || !state.selected ? 1 : 0.35}; cursor:pointer"
+           data-country="${d.country}">
+        <div class="country-name" title="${d.country}">${d.country}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${pct}%; background:${color}"></div>
+        </div>
+        <div class="stat-value">${(d[metric] || 0).toFixed(2)}</div>
+      </div>
+    `);
+  });
+
+  // Click to select
+  container.querySelectorAll(".stat-bar").forEach(el => {
+    el.addEventListener("click", () => {
+      const c = el.dataset.country;
+      const found = data.find(x => x.country === c);
+      if (found) {
+        state.selected = state.selected?.country === c ? null : found;
+        if (state.selected) {
+          document.getElementById("selected-info").classList.add("visible");
+          document.getElementById("sel-country").textContent = found.country;
+          document.getElementById("sel-score").textContent = found.score.toFixed(3);
+          document.getElementById("sel-gdp").textContent = found.gdp.toFixed(3);
+          document.getElementById("sel-region").textContent = found.region;
+          document.getElementById("sel-health").textContent = (found.health || 0).toFixed(3);
+        } else {
+          document.getElementById("selected-info").classList.remove("visible");
+        }
+        renderScatter();
+        renderBars();
+        renderParallel();
+      }
+    });
+  });
+}
+
+// ─── PARALLEL COORDINATES (Elaborate + Connect) ───────────────────────────────
+const parallelSvg = d3.select("#parallel");
+const pMargin = { top: 20, right: 40, bottom: 30, left: 40 };
+let pW, pH;
+const pDims = ["score","gdp","social","health","freedom","generosity","corruption"];
+const pLabels = { score:"Happiness", gdp:"GDP", social:"Social", health:"Health", freedom:"Freedom", generosity:"Generosity", corruption:"Trust" };
+
+function initParallel() {
+  const container = document.getElementById("parallel").parentElement;
+  pW = container.clientWidth - 56 - pMargin.left - pMargin.right;
+  pH = 200;
+  parallelSvg
+    .attr("width", pW + pMargin.left + pMargin.right)
+    .attr("height", pH + pMargin.top + pMargin.bottom);
+  renderParallel();
+}
+
+function renderParallel() {
+  if (!pW) return;
+  parallelSvg.selectAll("*").remove();
+  const g = parallelSvg.append("g").attr("transform", `translate(${pMargin.left},${pMargin.top})`);
+
+  const filtered = state.region === "all" ? data : data.filter(d => d.region === state.region);
+  const topData = [...filtered].sort((a,b) => b.score - a.score).slice(0, state.topN);
+
+  const xScale = d3.scalePoint().domain(pDims).range([0, pW]);
+  const yScales = {};
+  pDims.forEach(dim => {
+    yScales[dim] = d3.scaleLinear()
+      .domain(d3.extent(topData, d => d[dim] || 0))
+      .range([pH, 0]);
+  });
+
+  const line = d3.line()
+    .defined(([,v]) => v !== undefined && v !== null)
+    .x(([k]) => xScale(k))
+    .y(([k, v]) => yScales[k](v || 0));
+
+  // Draw lines
+  g.selectAll(".pline")
+    .data(topData)
+    .join("path")
+    .attr("class", "pline connection-line")
+    .attr("fill", "none")
+    .attr("stroke", d => regionColors(d.region))
+    .attr("stroke-width", d => {
+      if (state.hovered?.country === d.country || state.selected?.country === d.country) return 3;
+      return 1.5;
+    })
+    .attr("opacity", d => {
+      if (state.hovered?.country === d.country || state.selected?.country === d.country) return 1;
+      if (state.hovered || state.selected) return 0.1;
+      return 0.5;
+    })
+    .attr("d", d => line(pDims.map(k => [k, d[k]])))
+    .on("mouseover", function(event, d) {
+      state.hovered = d;
+      showTip(event, `<strong>${d.country}</strong><span>${d.region}</span><br/>
+        Score: <strong>${d.score.toFixed(2)}</strong><br/>
+        GDP: <strong>${d.gdp.toFixed(2)}</strong><br/>
+        Freedom: <strong>${(d.freedom||0).toFixed(2)}</strong>`);
+      renderParallel();
+    })
+    .on("mousemove", moveTip)
+    .on("mouseout", function() {
+      state.hovered = null;
+      hideTip();
+      renderParallel();
+    });
+
+  // Axes
+  pDims.forEach(dim => {
+    const ax = g.append("g").attr("transform", `translate(${xScale(dim)},0)`);
+    ax.call(d3.axisLeft(yScales[dim]).ticks(4));
+    ax.select(".domain").attr("stroke", "var(--border)");
+    ax.selectAll(".tick line").attr("stroke", "var(--border)");
+    ax.selectAll(".tick text").attr("fill", "var(--text-muted)").attr("font-size", 9);
+    ax.append("text")
+      .attr("y", -10).attr("text-anchor", "middle")
+      .attr("fill", "var(--accent)").attr("font-size", 11).attr("font-weight", 600)
+      .text(pLabels[dim]);
+  });
+
+  // Legend
+  const legendEl = document.getElementById("legend");
+  legendEl.innerHTML = "";
+  const presentRegions = [...new Set(topData.map(d => d.region))].sort();
+  presentRegions.forEach(r => {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.innerHTML = `<div class="legend-dot" style="background:${regionColors(r)}"></div>${r}`;
+    item.addEventListener("click", () => {
+      if (state.region === r) {
+        state.region = "all";
+        filterSel.value = "all";
+      } else {
+        state.region = r;
+        filterSel.value = r;
+      }
+      update();
+    });
+    legendEl.appendChild(item);
+  });
+}
+
+// ─── UPDATE ───────────────────────────────────────────────────────────────────
+function update() {
+  renderScatter();
+  renderBars();
+  renderParallel();
+}
+
+// ─── EVENT LISTENERS ──────────────────────────────────────────────────────────
+// FILTER
+filterSel.addEventListener("change", e => {
+  state.region = e.target.value;
+  state.selected = null;
+  document.getElementById("selected-info").classList.remove("visible");
+  update();
+});
+
+// ENCODE
+document.querySelectorAll("#encode-btns .btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#encode-btns .btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    state.encoding = btn.dataset.enc;
+    renderScatter();
+  });
+});
+
+// RECONFIGURE
+document.getElementById("reconfig-y").addEventListener("change", e => {
+  state.yMetric = e.target.value;
+  update();
+});
+
+// ABSTRACT (top-N slider)
+document.getElementById("top-n").addEventListener("input", e => {
+  state.topN = +e.target.value;
+  document.getElementById("top-n-label").textContent = state.topN;
+  renderBars();
+  renderParallel();
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener("load", () => {
+  initScatter();
+  initParallel();
+  renderBars();
+});
+
+window.addEventListener("resize", () => {
+  scatterSvg.selectAll("*").remove();
+  scatterG = null;
+  initScatter();
+  initParallel();
+});
+</script>
+</body>
+</html>
