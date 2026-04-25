@@ -2,7 +2,7 @@
 
 An interactive data visualization dashboard exploring the **World Happiness Report 2019** — 156 countries, 7 wellbeing indicators, and 7 distinct interaction types built with D3.js.
 
-**[Live Demo →](https://YOUR-USERNAME.github.io/happiness-atlas/)**
+**[Live Demo →](https://Malik-Ahmed-Abdullah.github.io/happiness-atlas/)**
 
 ---
 
